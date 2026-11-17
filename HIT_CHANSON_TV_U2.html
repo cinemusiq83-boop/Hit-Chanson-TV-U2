@@ -1,0 +1,1178 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; media-src * blob: data:; connect-src * blob: data:; worker-src * blob:;">
+<title>HIT CHANSON TV</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HIT CHANSON TV">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#000000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="apple-touch-icon" href="https://storage.e.jimdo.com/cdn-cgi/image/quality=85,fit=scale-down,format=auto,trim=0;0;0;0,width=800,height=800/image/545093144/951e7817-2005-4835-ace4-ca3170cdb9be.jpg">
+<link rel="icon" type="image/jpg" href="https://storage.e.jimdo.com/cdn-cgi/image/quality=85,fit=scale-down,format=auto,trim=0;0;0;0,width=800,height=800/image/545093144/951e7817-2005-4835-ace4-ca3170cdb9be.jpg">
+<style>
+/* ── ÉCHELLE GLOBALE DE L'INTERFACE (logo, lower third, horloge) ──
+   1.25 = équivalent du zoom navigateur à 125 %. Change cette valeur pour ajuster. */
+:root { }
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: 'Oswald', Arial, sans-serif; }
+
+/* ── PLAYER — remplit le tvFrame en 16/9 ── */
+#player {
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  background: #000; object-fit: contain;
+}
+
+/* ── TVFRAME — zone 16/9 centrée pour les overlays ── */
+#tvFrame {
+  --u: calc(min(100vw, 100vh * 16 / 9) / 2080);   /* 1 px de la photo 2080×1170 */
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ── CONTROLS ── */
+#controls {
+  position: absolute;
+  left: 20px;
+  top: max(20px, env(safe-area-inset-top));
+  display: flex; gap: 10px; z-index: 20;
+  transition: opacity 0.4s ease;
+  pointer-events: all;
+}
+body.controls-hidden #controls { opacity: 0; pointer-events: none; }
+
+button {
+  background: rgba(255,255,255,0.12); color: white;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px; padding: 8px 12px; font-size: 15px;
+  cursor: pointer; -webkit-appearance: none; touch-action: manipulation;
+  font-family: 'Oswald', Arial, sans-serif;
+}
+
+/* ── SEARCH ── */
+#searchWrapper { position: relative; }
+#searchInput {
+  background: rgba(0,0,0,0.6); color: white;
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 6px; padding: 6px 12px; font-size: 15px;
+  width: 220px; outline: none; -webkit-appearance: none;
+  font-family: 'Oswald', Arial, sans-serif;
+}
+#searchInput::placeholder { color: rgba(255,255,255,0.45); }
+#searchResults {
+  position: absolute; top: 110%; left: 0; width: 100%; max-height: 50vh;
+  overflow-y: auto; background: rgba(0,0,0,0.95);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px; z-index: 100; display: none;
+  -webkit-overflow-scrolling: touch;
+}
+#searchResults div {
+  padding: 12px 14px; font-size: 14px; color: #fff; cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  touch-action: manipulation;
+  font-family: 'Oswald', Arial, sans-serif;
+}
+#searchResults div:active { background: rgba(255,45,45,0.35); }
+#searchResults div span { color: rgba(255,255,255,0.5); font-size: 12px; }
+
+/* ══════════════════════════════════════════════════════════════
+   MISE EN PAGE 16/9 — calée sur la photo de référence (2080 × 1170)
+   --u = 1 pixel de la photo, mis à l'échelle de l'écran (défini par JS aussi)
+══════════════════════════════════════════════════════════════ */
+
+/* HORLOGE : barre des secondes + 16 (grand) + 30 (petit, en exposant) */
+#parisTime {
+  position: absolute;
+  left: calc(167 * var(--u));
+  top: calc(87 * var(--u));
+  width: calc(129 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  z-index: 20;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+/* ── INTRO HORLOGE (lignes qui arrivent de la gauche) ── */
+#clockIntro {
+  position: absolute;
+  left: calc(167 * var(--u));
+  top: calc(87 * var(--u));
+  z-index: 21;
+  pointer-events: none;
+  display: none;
+}
+.ci-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: calc(3 * var(--u));
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.ci-white { background-color: #ffffff; }
+.ci-red   { background-color: #c0191a; height: calc(4 * var(--u)); }
+
+#clockSecBar {
+  width: 100%;
+  height: calc(7 * var(--u));
+  background: rgba(255,255,255,0.3);
+  margin-bottom: calc(11.8 * var(--u));
+  overflow: hidden;
+}
+#clockSecFill {
+  height: 100%;
+  background: #fff;
+  transition: width 1s linear;
+}
+
+#clockDigits {
+  display: flex;
+  align-items: flex-start;
+  line-height: 1;
+}
+#clockHour {
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  font-size: calc(97 * var(--u));
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+  letter-spacing: calc(-2 * var(--u));
+  line-height: 1;
+}
+#clockMin {
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  font-size: calc(61 * var(--u));
+  color: #fff;
+  text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+  letter-spacing: 0;
+  line-height: 1;
+  margin-top: calc(2 * var(--u));
+  margin-left: calc(8 * var(--u));
+}
+
+/* LOGO (même place, même taille que sur la photo) */
+#logo {
+  position: absolute;
+  left: calc(168 * var(--u));
+  top: calc(852 * var(--u));
+  width: calc(202 * var(--u));
+  height: calc(206 * var(--u));
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.95;
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* IMAGE OPPOSÉE (symétrique de l'horloge, à droite) */
+#logoOpposite {
+  position: absolute;
+  right: calc(167 * var(--u));
+  top: calc(87 * var(--u));
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0;
+  z-index: 20;
+  pointer-events: none;
+  transition: opacity 1s ease;
+}
+
+/* ══════════════════════════════════════
+   LOWER THIRD
+══════════════════════════════════════ */
+
+#lowerThird {
+  --red-h: calc(80 * var(--u));
+  --white-h: calc(50 * var(--u));
+  position: absolute;
+  left: calc(446 * var(--u));
+  top: calc(880 * var(--u));
+  width: calc(1569 * var(--u));
+  height: calc(135 * var(--u));
+  z-index: 15;
+  pointer-events: none;
+  display: none;
+}
+
+.line {
+  position: absolute;
+  height: calc(3 * var(--u));
+  transform-origin: left;
+  transform: scaleX(0);
+  z-index: 1;
+}
+
+/* LIGNES ANIMÉES */
+
+.l-1 {
+  top: calc(30.5 * var(--u));
+  left: 0;
+  width: calc(1569 * var(--u));
+  background: #fff;
+}
+.l-1.lt-enter {
+  animation: lineDraw .45s cubic-bezier(.16, 1, .3, 1) forwards .22s,
+  scanMove 1.8s ease-in-out .7s infinite alternate;
+}
+
+.l-2 {
+  top: calc(47.5 * var(--u));
+  left: calc(8 * var(--u));
+  width: calc(1273 * var(--u));
+  background: #fff;
+}
+.l-2.lt-enter {
+  animation: lineDraw .45s cubic-bezier(.16, 1, .3, 1) forwards .32s,
+  scanMoveInverse 1.5s ease-in-out .8s infinite alternate;
+}
+
+.l-3 {
+  top: calc(64 * var(--u));
+  left: 0;
+  width: calc(1361 * var(--u));
+  height: calc(4 * var(--u));
+  background: #c0191a;
+}
+.l-3.lt-enter {
+  animation: lineDraw .35s cubic-bezier(.16, 1, .3, 1) forwards .03s,
+  scanMove 1.2s ease-in-out .9s infinite alternate;
+}
+
+.l-4 {
+  top: calc(81.5 * var(--u));
+  left: calc(16 * var(--u));
+  width: calc(1206 * var(--u));
+  background: #fff;
+}
+.l-4.lt-enter {
+  animation: lineDraw .45s cubic-bezier(.16, 1, .3, 1) forwards .40s,
+  scanMoveInverse 2s ease-in-out 1s infinite alternate;
+}
+
+.l-5a {
+  top: calc(99.5 * var(--u));
+  left: calc(-124 * var(--u));
+  width: calc(124 * var(--u));
+  background: #fff;
+  transform-origin: right;
+}
+.l-5a.lt-enter {
+  animation: lineDraw .4s cubic-bezier(.16, 1, .3, 1) forwards .18s;
+}
+
+.l-5 {
+  top: calc(99.5 * var(--u));
+  left: 0;
+  width: calc(1197 * var(--u));
+  background: #fff;
+}
+.l-5.lt-enter {
+  animation: lineDraw .4s cubic-bezier(.16, 1, .3, 1) forwards .18s;
+}
+.l-5.lt-moving {
+  animation: lineDraw .4s cubic-bezier(.16, 1, .3, 1) forwards .18s,
+  scanMove 1.6s ease-in-out 0s infinite alternate;
+}
+
+.l-6 {
+  top: calc(116.5 * var(--u));
+  left: calc(16 * var(--u));
+  width: calc(1406 * var(--u));
+  background: #fff;
+}
+.l-6.lt-enter {
+  animation: lineDraw .45s cubic-bezier(.16, 1, .3, 1) forwards .44s,
+  scanMoveInverse 2.2s ease-in-out 1.2s infinite alternate;
+}
+
+/* BLOC ROUGE - ARTISTE */
+
+.center-band {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: auto;
+  height: var(--red-h);
+  display: flex;
+  align-items: center;
+  z-index: 2;
+}
+
+.red-block {
+  position: relative;
+  background: #c0191a;
+  height: 100%;
+  padding: 0 calc(20 * var(--u)) 0 calc(17 * var(--u));
+  display: flex;
+  align-items: center;
+  opacity: 0;
+}
+
+.red-block.lt-enter {
+  animation: showInstant .01s linear .50s forwards;
+}
+
+.red-block.lt-exit {
+  opacity: 1;
+  animation: lineClose .4s cubic-bezier(.77, 0, .175, 1) forwards;
+}
+
+/* Rideau blanc qui couvre puis découvre le bloc rouge */
+.red-wipe {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  transform: scaleX(0);
+  transform-origin: left;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.red-wipe.lt-enter {
+  animation:
+    wipeExpand .10s cubic-bezier(.2, 0, .2, 1) .40s forwards,
+    wipeRetract .42s cubic-bezier(.25, 1, .4, 1) .50s forwards;
+}
+
+.artist-text {
+  color: #fff;
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  font-size: calc(64 * var(--u));
+  font-weight: 400;
+  letter-spacing: calc(1.5 * var(--u));
+  line-height: 1;
+  padding-top: calc(3 * var(--u));
+  -webkit-text-stroke: calc(.8 * var(--u)) #fff;
+  white-space: nowrap;
+}
+
+/* BLOC BLANC - INFORMATIONS */
+
+.sub-text-area {
+  position: absolute;
+  top: var(--red-h);
+  left: 0;
+  height: var(--white-h);
+  background: transparent;
+  overflow: hidden;
+  z-index: 2;
+  width: 0;
+  opacity: 0;
+}
+
+.sub-text-area.lt-enter {
+  animation: showInstant .01s linear .80s forwards;
+}
+
+.sub-text-area.lt-ready {
+  opacity: 1;
+  transition: opacity .3s ease;
+}
+
+.sub-text-area.lt-exit {
+  opacity: 1 !important;
+  animation: lineClose .4s cubic-bezier(.77, 0, .175, 1) forwards !important;
+}
+
+/* Rideau noir qui couvre puis découvre le bloc blanc */
+.white-wipe {
+  position: absolute;
+  top: var(--red-h);
+  left: 0;
+  height: var(--white-h);
+  background: #000;
+  transform: scaleX(0);
+  transform-origin: left;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.white-wipe.lt-enter {
+  animation:
+    wipeExpand .16s cubic-bezier(.2, 0, .2, 1) .64s forwards,
+    wipeRetract .24s cubic-bezier(.25, 1, .4, 1) .80s forwards;
+}
+
+.rolling-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  transition: transform .45s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transform: translateY(0);
+}
+
+.text-item {
+  height: var(--white-h);
+  display: inline-flex;
+  align-items: center;
+  padding: calc(2 * var(--u)) calc(9 * var(--u)) 0;
+  background: #fff;
+  color: #1c1c1c;
+  font-family: 'Bebas Neue', Impact, sans-serif;
+  font-size: calc(36 * var(--u));
+  line-height: 1;
+  letter-spacing: calc(1.2 * var(--u));
+  -webkit-text-stroke: calc(.5 * var(--u)) #1c1c1c;
+  white-space: nowrap;
+  width: max-content;
+  overflow: hidden;
+}
+
+.text-item .ti {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ANIMATIONS */
+
+@keyframes lineDraw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes lineClose {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+
+@keyframes showInstant {
+  to { opacity: 1; }
+}
+
+@keyframes wipeExpand {
+  0% {
+    transform-origin: left;
+    transform: scaleX(0);
+  }
+  100% {
+    transform-origin: left;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes wipeRetract {
+  0% {
+    transform-origin: right;
+    transform: scaleX(1);
+  }
+  100% {
+    transform-origin: right;
+    transform: scaleX(0);
+  }
+}
+
+@keyframes scanMove {
+  0% { transform: scaleX(1) translateX(0); }
+  100% { transform: scaleX(1) translateX(calc(15 * var(--u))); }
+}
+
+@keyframes scanMoveInverse {
+  0% { transform: scaleX(1) translateX(calc(12 * var(--u))); }
+  100% { transform: scaleX(1) translateX(calc(-8 * var(--u))); }
+}
+
+/* ══ SORTIE = ENTRÉE À L'ENVERS ══ */
+.line.lt-out { animation: lineUndraw .35s cubic-bezier(.7,0,.84,0) both; }
+.l-3.lt-out  { animation-delay: .66s; }
+.l-5.lt-out, .l-5a.lt-out { animation-duration: .4s; animation-delay: .46s; }
+.l-1.lt-out  { animation-duration: .45s; animation-delay: .37s; }
+.l-2.lt-out  { animation-duration: .45s; animation-delay: .27s; }
+.l-4.lt-out  { animation-duration: .45s; animation-delay: .19s; }
+.l-6.lt-out  { animation-duration: .45s; animation-delay: .15s; }
+
+.red-block.lt-out { opacity: 1; animation: holdThenHide .54s linear forwards; }
+.red-wipe.lt-out {
+  animation:
+    wipeCoverR .42s cubic-bezier(.6,0,.75,0) .12s forwards,
+    wipeUncoverL .10s cubic-bezier(.8,0,.8,1) .54s forwards;
+}
+.sub-text-area.lt-out { opacity: 1; transition: none; animation: holdThenHide .24s linear forwards; }
+.white-wipe.lt-out {
+  animation:
+    wipeCoverR .24s cubic-bezier(.6,0,.75,0) 0s forwards,
+    wipeUncoverL .16s cubic-bezier(.8,0,.8,1) .24s forwards;
+}
+
+@keyframes lineUndraw { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@keyframes holdThenHide { 0%, 99.9% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes wipeCoverR   { from { transform-origin: right; transform: scaleX(0); } to { transform-origin: right; transform: scaleX(1); } }
+@keyframes wipeUncoverL { from { transform-origin: left; transform: scaleX(1); } to { transform-origin: left; transform: scaleX(0); } }
+
+/* ── SPLASH ── */
+#splash {
+  position: fixed; inset: 0; background: #000; z-index: 9999;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 30px;
+}
+#splash img { width: clamp(100px, 25vw, 200px); opacity: 0.95; border-radius: 24px; }
+#splashBtn {
+  background: #ff2d2d; color: #fff; border: none; border-radius: 14px;
+  padding: clamp(12px,2vh,18px) clamp(28px,5vw,52px);
+  font-size: clamp(16px, 3vw, 22px); font-weight: 800; cursor: pointer;
+  letter-spacing: 2px; box-shadow: 0 6px 24px rgba(255,45,45,0.4);
+  font-family: 'Bebas Neue', Impact, sans-serif;
+}
+</style>
+</head>
+<body>
+
+<div id="splash">
+  <img src="https://storage.e.jimdo.com/cdn-cgi/image/quality=85,fit=scale-down,format=auto,trim=0;0;0;0,width=477,height=480/image/531025464/077bc616-c1cb-480e-a1bf-1ef35b06cd8e.png" alt="Logo" />
+  <button id="splashBtn">&#9654; REGARDER</button>
+</div>
+
+<video id="player" playsinline controls></video>
+
+<div id="tvFrame">
+<div id="controls">
+  <button id="fullscreenBtn">&#9638; Plein &#233;cran</button>
+  <div id="searchWrapper">
+    <input type="text" id="searchInput" placeholder="&#128269; Rechercher un titre..." autocomplete="off" />
+    <div id="searchResults"></div>
+  </div>
+</div>
+
+<div id="clockIntro">
+  <div class="ci-line ci-white"></div>
+  <div class="ci-line ci-white"></div>
+  <div class="ci-line ci-red"></div>
+  <div class="ci-line ci-white"></div>
+  <div class="ci-line ci-white"></div>
+  <div class="ci-line ci-white"></div>
+</div>
+<div id="parisTime">
+  <div id="clockSecBar"><div id="clockSecFill" style="width:0%"></div></div>
+  <div id="clockDigits">
+    <span id="clockHour">--</span>
+    <span id="clockMin">--</span>
+  </div>
+</div>
+<div id="logo"></div>
+<div id="logoOpposite"></div>
+
+<div id="lowerThird" aria-live="polite" role="status">
+
+  <div class="line l-1"></div>
+  <div class="line l-2"></div>
+  <div class="line l-3"></div>
+  <div class="line l-4"></div>
+  <div class="line l-5a"></div>
+  <div class="line l-5"></div>
+  <div class="line l-6"></div>
+
+  <!-- BLOC ROUGE -->
+  <div class="center-band">
+    <div class="red-block" id="ltRedBlock">
+      <div class="artist-text" id="ltArtistText">
+        ARTISTE
+      </div>
+      <div class="red-wipe" id="ltRedWipe"></div>
+    </div>
+  </div>
+
+  <!-- RIDEAU NOIR + BLOC BLANC -->
+  <div class="white-wipe" id="ltWhiteWipe"></div>
+
+  <div class="sub-text-area" id="whiteBlock">
+    <div class="rolling-wrapper" id="textRoller">
+
+      <div class="text-item" id="ltItem3">
+        <span class="ti">TITRE</span>
+      </div>
+
+      <div class="text-item" id="ltItem2">
+        <span class="ti">LABEL · ANNÉE</span>
+      </div>
+
+      <div class="text-item" id="ltItem1">
+        <span class="ti">COMPOSITEURS</span>
+      </div>
+
+      <div class="text-item" id="ltItem0">
+        <span class="ti">TITRE</span>
+      </div>
+
+    </div>
+  </div>
+</div><!-- /#lowerThird -->
+</div><!-- /#tvFrame -->
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+<script>
+const SHOW_AFTER    = 15;
+const BEFORE_END    = 36;
+const SHOW_DURATION = 10;
+
+const LOGO_URL = "https://storage.e.jimdo.com/cdn-cgi/image/quality=85%2Cfit=scale-down%2Cformat=auto%2Ctrim=19;0;18;0%2Cwidth=1024%2Cheight=1024/image/555720103/30b0e1dd-4b93-4d59-aeb1-eae8651c5156.png";
+document.getElementById('logo').style.backgroundImage = `url(${LOGO_URL})`;
+
+/* Image opposée au logo (à droite) — même taille que l'horloge */
+const LOGO_OPPOSITE_URL = "https://files.catbox.moe/hp2z3j.png";
+document.getElementById('logoOpposite').style.backgroundImage = `url(${LOGO_OPPOSITE_URL})`;
+
+function syncLogoOppositeSize() {
+  const clock = document.getElementById('parisTime');
+  const logoOpposite = document.getElementById('logoOpposite');
+  const rect = clock.getBoundingClientRect();
+  const scale = 1.3;
+  logoOpposite.style.width = (rect.width * scale) + 'px';
+  logoOpposite.style.height = (rect.height * scale) + 'px';
+}
+
+/* ── INTRO HORLOGE : dimensionnement des lignes sur la taille réelle de l'horloge ── */
+function syncClockIntroSize() {
+  const clock = document.getElementById('parisTime');
+  const intro = document.getElementById('clockIntro');
+  const rect = { width: clock.offsetWidth, height: clock.offsetHeight }; // offset* ignore la transform scale
+  intro.style.width = rect.width + 'px';
+  intro.style.height = rect.height + 'px';
+  const lines = intro.querySelectorAll('.ci-line');
+  const step = rect.height / (lines.length + 1);
+  lines.forEach((el, i) => {
+    el.style.top = (step * (i + 1)) + 'px';
+  });
+}
+
+/* ── INTRO HORLOGE : animation des lignes qui arrivent de la gauche, puis apparition de l'horloge ── */
+let clockIntroTimer1 = null;
+let clockIntroTimer2 = null;
+function triggerClockIntro() {
+  clearTimeout(clockIntroTimer1);
+  clearTimeout(clockIntroTimer2);
+
+  const clockBox = document.getElementById('parisTime');
+  const intro = document.getElementById('clockIntro');
+  const lines = intro.querySelectorAll('.ci-line');
+
+  syncClockIntroSize();
+
+  // Horloge cachée pendant l'arrivée des lignes
+  clockBox.style.transition = 'none';
+  clockBox.style.opacity = '0';
+  void clockBox.offsetWidth;
+  clockBox.style.transition = 'opacity 0.4s ease';
+
+  // Réinitialiser puis lancer les lignes
+  intro.style.transition = 'none';
+  intro.style.opacity = '1';
+  intro.style.display = 'block';
+  lines.forEach((el) => {
+    el.style.animation = 'none';
+    el.style.transform = 'scaleX(0)';
+  });
+  void intro.offsetWidth;
+  lines.forEach((el, i) => {
+    el.style.animation = `lineDraw 0.5s ease forwards ${i * 0.1}s`;
+  });
+
+  const totalDuration = lines.length * 0.1 + 0.5; // durée totale de l'arrivée des lignes
+
+  clockIntroTimer1 = setTimeout(() => {
+    // Les lignes sont arrivées : fondu vers l'horloge
+    intro.style.transition = 'opacity 0.3s ease';
+    intro.style.opacity = '0';
+    clockBox.style.opacity = '0.92';
+
+    clockIntroTimer2 = setTimeout(() => {
+      intro.style.display = 'none';
+      lines.forEach((el) => {
+        el.style.animation = 'none';
+        el.style.transform = 'scaleX(0)';
+      });
+    }, 350);
+  }, totalDuration * 1000);
+}
+/* ══════════════════════════════════════
+   PLAYLIST
+══════════════════════════════════════ */
+const playlistSource = [
+    {"url": "https://files.catbox.moe/lhl7j9.mp4", "titre": "We Are The People", "artiste": "Martin Garrix Feat. Bono & The Edge", "label": "RCA Group Sony Music", "compositeurs": "S-E.Carmody, P-D.Hewson, M.Garritsen, A.Nedler, D.Evans, K.Fogelmark", "annee": 2021},
+  {"url": "https://files.catbox.moe/0ui3oo.mp4", "titre": "Pride (In The Name Of Love)", "artiste": "U2", "label": "Island Universal Music", "compositeurs": "U2", "annee": 1984, "dezoom":true},
+ {"url": "https://files.catbox.moe/hf1f46.mp4", "titre": "I Still Haven't Found What I'M Looking For", "artiste": "U2", "label": "A.Z. Universal Music", "compositeurs": "U2", "annee": 1987, "dezoom":true},
+ {"url": "https://files.catbox.moe/u8j65q.mp4", "titre": "With Or Without You", "artiste": "U2", "label": "A.Z. Universal Music", "compositeurs": "U2", "annee": 1987, "dezoom":true},
+];
+
+let playlist = [...playlistSource];
+const player = document.getElementById('player');
+let currentIndex = 0;
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+shuffle(playlist);
+
+function initPlaylist() {
+  currentIndex = 0;
+  loadVideo(currentIndex);
+}
+
+function loadVideo(index) {
+  if (index >= playlist.length) { shuffle(playlist); index = 0; }
+  if (index < 0) index = playlist.length - 1;
+  currentIndex = index;
+  
+  const item = playlist[currentIndex];
+  player.style.objectFit = item.dezoom ? 'contain' : 'cover';
+  resetLowerThird();
+  triggerClockIntro();
+  resetLogoOppositeFade();
+
+  if (window.Hls && Hls.isSupported() && item.url.includes('.m3u8')) {
+    if (window.hls) window.hls.destroy();
+    window.hls = new Hls();
+    window.hls.loadSource(item.url);
+    window.hls.attachMedia(player);
+  } else {
+    player.src = item.url;
+    player.load();
+  }
+  player.play().catch(()=>{});
+}
+
+player.addEventListener('ended', () => {
+  currentIndex++;
+  loadVideo(currentIndex);
+});
+
+/* ── FONDU IMAGE OPPOSÉE (à l'opposé de l'horloge) ── */
+let logoOppositeFadeState = { in: false, out: false };
+function resetLogoOppositeFade() {
+  logoOppositeFadeState.in = false;
+  logoOppositeFadeState.out = false;
+  const logoOpp = document.getElementById('logoOpposite');
+  logoOpp.style.transition = 'none';
+  logoOpp.style.opacity = '0';
+  void logoOpp.offsetWidth;
+  logoOpp.style.transition = 'opacity 1s ease';
+}
+
+/* ── GESTION DU LOWER THIRD ── */
+let ltTimer = null;
+let ltRollInterval = null;
+let ltActive = false;
+let widthsArray = [0, 0, 0, 0];
+let ltStep = 0;
+let WHITE_H = 50;
+
+function resetLowerThird() {
+  clearTimeout(ltTimer);
+  clearInterval(ltRollInterval);
+
+  const lt = document.getElementById('lowerThird');
+  lt.style.display = 'none';
+
+  const elements = lt.querySelectorAll(
+    '.line, .red-block, .red-wipe, .sub-text-area, .white-wipe'
+  );
+
+  elements.forEach(el => {
+    el.classList.remove('lt-enter', 'lt-exit', 'lt-moving', 'lt-ready', 'lt-out');
+    el.style.animation = '';
+    el.style.transformOrigin = '';
+  });
+
+  const whiteBlock = document.getElementById('whiteBlock');
+  const whiteWipe = document.getElementById('ltWhiteWipe');
+  whiteBlock.style.transition = '';
+  whiteBlock.style.width = '';
+  whiteBlock.style.opacity = '';
+  whiteBlock.style.left = '';
+  whiteWipe.style.width = '';
+  whiteWipe.style.left = '';
+
+  document.getElementById('textRoller').style.transform =
+    'translateY(0px)';
+
+  ltActive = false;
+}
+
+function triggerLowerThird() {
+
+  if (ltActive) return;
+
+  const current = playlist[currentIndex];
+
+  if (!current.url.includes('files.catbox.moe')) return;
+
+  ltActive = true;
+
+  document.getElementById('ltArtistText').textContent =
+    current.artiste.toUpperCase();
+
+  document.getElementById('ltItem0').firstElementChild.textContent =
+    current.titre.toUpperCase();
+
+  document.getElementById('ltItem1').firstElementChild.textContent =
+    current.compositeurs
+      ? current.compositeurs.toUpperCase()
+      : 'COMPOSITEUR INCONNU';
+
+  document.getElementById('ltItem2').firstElementChild.textContent =
+    `${current.label.toUpperCase()} ${current.annee}`;
+
+  document.getElementById('ltItem3').firstElementChild.textContent =
+    current.titre.toUpperCase();
+
+  const lt = document.getElementById('lowerThird');
+  lt.style.display = 'block';
+
+  WHITE_H = document.getElementById('whiteBlock').offsetHeight || WHITE_H;
+
+  const whiteBlock = document.getElementById('whiteBlock');
+  const whiteWipe = document.getElementById('ltWhiteWipe');
+  const textRoller = document.getElementById('textRoller');
+
+  /* Calcul de la position du bloc blanc */
+
+  const artistText = document.getElementById('ltArtistText');
+  const artistStr = artistText.textContent;
+
+  let offset3Letters = 0;
+
+  {
+    const cs = getComputedStyle(artistText);
+    const redBlockStyle = getComputedStyle(document.querySelector('.red-block'));
+
+    const padLeft = (parseFloat(redBlockStyle.paddingLeft) || 0) +
+                    (parseFloat(redBlockStyle.borderLeftWidth) || 0);
+
+    const measureSpan = document.createElement('span');
+
+    measureSpan.style.cssText = `
+      font-family: ${cs.fontFamily};
+      font-size: ${cs.fontSize};
+      font-weight: ${cs.fontWeight};
+      letter-spacing: ${cs.letterSpacing};
+      white-space: pre;
+      position: absolute;
+      visibility: hidden;
+    `;
+
+    measureSpan.textContent = artistStr.slice(
+      0,
+      Math.min(3, artistStr.length)
+    );
+
+    document.body.appendChild(measureSpan);
+
+    offset3Letters = padLeft + measureSpan.offsetWidth;
+
+    document.body.removeChild(measureSpan);
+  }
+
+  /* Largeurs des textes */
+
+  widthsArray = [0, 1, 2, 3].map(i =>
+    document.getElementById('ltItem' + i).offsetWidth
+  );
+
+  /* Positionnement simultané du bloc blanc ET du rideau noir */
+  whiteBlock.style.left = `${offset3Letters}px`;
+  whiteBlock.style.width = `${widthsArray[0]}px`;
+
+  whiteWipe.style.left = `${offset3Letters}px`;
+  whiteWipe.style.width = `${widthsArray[0]}px`;
+
+  textRoller.style.transition = 'none';
+  textRoller.style.transform = `translateY(${-3 * WHITE_H}px)`;
+
+  setTimeout(() => {
+    textRoller.style.transition = '';
+  }, 50);
+
+  /* Lancement des animations d'entrée */
+  const enterElements = lt.querySelectorAll(
+    '.line, .red-block, .red-wipe, .sub-text-area, .white-wipe'
+  );
+  enterElements.forEach(el => el.classList.add('lt-enter'));
+
+  /* Une fois le rideau noir rétracté (1.05s), activation de la transition fluide de largeur */
+  setTimeout(() => {
+    whiteBlock.classList.remove('lt-enter');
+    whiteBlock.classList.add('lt-ready');
+  }, 1050);
+
+  /* Ajustement ligne 5 */
+
+  const l5 = lt.querySelector('.l-5');
+
+  if (l5) {
+    l5.style.left = `${offset3Letters}px`;
+    l5.style.width =
+      `calc(1197 * var(--u) - ${offset3Letters}px)`;
+  }
+
+  const l5a = lt.querySelector('.l-5a');
+
+  if (l5a) {
+    l5a.style.width =
+      `calc(124 * var(--u) + ${offset3Letters}px)`;
+  }
+
+  /* Ligne 6 : ne dépasse pas le rectangle blanc par la gauche.
+     Bord gauche = bord gauche du rectangle blanc + 8u (marge pour l'oscillation
+     scanMoveInverse qui recule de 8u). Le bord droit reste à 1422u comme avant. */
+  const l6 = lt.querySelector('.l-6');
+
+  if (l6) {
+    l6.style.left = `calc(${offset3Letters}px + 8 * var(--u))`;
+    l6.style.width = `calc(1414 * var(--u) - ${offset3Letters}px)`;
+  }
+
+  setTimeout(() => {
+    if (l5) l5.classList.add('lt-moving');
+  }, 900);
+
+  /* Défilement des informations */
+
+  let step = 0;
+  ltStep = 0;
+
+  ltRollInterval = setInterval(() => {
+
+    step++;
+    ltStep = step;
+
+    if (step <= 3) {
+
+      /* La fenêtre de découpe est élargie au plus large des textes ;
+         chaque rectangle blanc garde sa largeur exacte. Les deux
+         descendent ensemble : l'ancien sort en bas, le nouveau entre par le haut. */
+      whiteBlock.style.width = `${Math.max(...widthsArray)}px`;
+
+      textRoller.style.transform =
+        `translateY(${-3 * WHITE_H + step * WHITE_H}px)`;
+    }
+
+    if (step === 3) {
+      clearInterval(ltRollInterval);
+    }
+
+  }, 2000);
+
+  /* Durée d'affichage */
+
+  ltTimer = setTimeout(() => {
+    closeLowerThird();
+  }, SHOW_DURATION * 1000);
+}
+
+/* FERMETURE DU LOWER THIRD */
+
+function closeLowerThird() {
+  if (!ltActive) return;
+  clearTimeout(ltTimer);
+  clearInterval(ltRollInterval);
+
+  const lt = document.getElementById('lowerThird');
+  const whiteBlock = document.getElementById('whiteBlock');
+
+  // La fenêtre reprend la largeur du texte affiché pour que la sortie reste identique
+  whiteBlock.style.width = `${widthsArray[ltStep] || widthsArray[0]}px`;
+
+  // On enlève l'état d'entrée et on joue la séquence inverse
+  lt.querySelectorAll('.line, .red-block, .red-wipe, .sub-text-area, .white-wipe').forEach(el => {
+    el.classList.remove('lt-enter', 'lt-moving', 'lt-ready', 'lt-exit');
+    el.style.animation = '';
+    void el.offsetWidth;
+    el.classList.add('lt-out');
+  });
+
+  // Fin de la sortie : remise à zéro complète
+  setTimeout(() => {
+    resetLowerThird();
+    const l5 = lt.querySelector('.l-5');
+    if (l5) { l5.style.left = ''; l5.style.width = ''; }
+    const l5a = lt.querySelector('.l-5a');
+    if (l5a) l5a.style.width = '';
+    const l6 = lt.querySelector('.l-6');
+    if (l6) { l6.style.left = ''; l6.style.width = ''; }
+  }, 1100);
+}
+
+player.addEventListener('timeupdate', () => {
+  const current = player.currentTime;
+  const total = player.duration;
+  if (!total) return;
+
+  if (current >= SHOW_AFTER && current < SHOW_AFTER + 1 && !ltActive) {
+    triggerLowerThird();
+  }
+  if (total - current <= BEFORE_END && total - current > BEFORE_END - 1 && !ltActive) {
+    triggerLowerThird();
+  }
+
+  /* ── Fondu de l'image opposée à l'horloge ── */
+  const logoOpp = document.getElementById('logoOpposite');
+
+  // Réapparition en fondu dans les 5 premières secondes du clip
+  if (current < 5 && !logoOppositeFadeState.in) {
+    logoOppositeFadeState.in = true;
+    logoOpp.style.opacity = '0.95';
+  }
+
+  // Disparition en fondu 5 secondes avant la fin du clip
+  if (total - current <= 5 && !logoOppositeFadeState.out) {
+    logoOppositeFadeState.out = true;
+    logoOpp.style.opacity = '0';
+  }
+});
+
+/* ── SPLASH ── */
+document.getElementById('splashBtn').addEventListener('click', () => {
+  document.getElementById('splash').style.display = 'none';
+  initPlaylist();
+});
+
+/* ── MOTEUR DE RECHERCHE ── */
+(function(){
+  const input = document.getElementById('searchInput');
+  const results = document.getElementById('searchResults');
+
+  function renderResults(query) {
+    results.innerHTML = '';
+    
+    if (!query.trim()) {
+      const top7 = playlist;
+      const header = document.createElement('div');
+      header.style.fontSize = '12px';
+      header.style.color = 'rgba(255,255,255,0.4)';
+      header.style.padding = '8px 14px 4px 14px';
+      header.style.textTransform = 'uppercase';
+      header.style.letterSpacing = '1px';
+      header.textContent = 'Suggestions :';
+      results.appendChild(header);
+
+      top7.forEach(item => createResultItem(item));
+      results.style.display = 'block';
+      return;
+    }
+    
+    const matched = playlistSource.filter(item => 
+      item.titre.toLowerCase().includes(query.toLowerCase()) ||
+      item.artiste.toLowerCase().includes(query.toLowerCase())
+    );
+
+    if (matched.length === 0) { results.style.display = 'none'; return; }
+
+    matched.forEach(item => createResultItem(item));
+    results.style.display = 'block';
+  }
+
+  function createResultItem(item) {
+    const div = document.createElement('div');
+    div.innerHTML = `${item.titre} <br><span>${item.artiste}</span>`;
+    div.addEventListener('click', () => {
+      const foundIndex = playlist.findIndex(p => p.url === item.url);
+      if (foundIndex !== -1) {
+        loadVideo(foundIndex);
+      } else {
+        playlist.splice(currentIndex + 1, 0, item);
+        loadVideo(currentIndex + 1);
+      }
+      input.value = '';
+      results.style.display = 'none';
+    });
+    results.appendChild(div);
+  }
+
+  input.addEventListener('input', () => renderResults(input.value));
+  input.addEventListener('focus', () => { showControls(); renderResults(input.value); });
+  
+  document.addEventListener('click', e => {
+    if (!document.getElementById('searchWrapper').contains(e.target)) {
+      results.style.display = 'none';
+    }
+  });
+})();
+
+/* ── FULLSCREEN ── */
+document.getElementById('fullscreenBtn').addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else document.documentElement.requestFullscreen();
+});
+
+/* ── HORLOGE PARIS ── */
+function updateParisTime() {
+  const now = new Date();
+  const options = { timeZone: 'Europe/Paris', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+  const parts = new Intl.DateTimeFormat('fr-FR', options).formatToParts(now);
+  const get = (t) => parts.find(p => p.type === t)?.value ?? '00';
+  document.getElementById('clockHour').textContent = get('hour');
+  document.getElementById('clockMin').textContent = get('minute');
+  const sec = parseInt(get('second'), 10);
+  document.getElementById('clockSecFill').style.width = (sec / 59 * 100) + '%';
+}
+setInterval(updateParisTime, 1000);
+updateParisTime();
+
+/* ── CONTRÔLES AUTO-MASQUAGE ── */
+let hideControlsTimer = null;
+function showControls() {
+  document.body.classList.remove('controls-hidden');
+  clearTimeout(hideControlsTimer);
+  hideControlsTimer = setTimeout(() => document.body.classList.add('controls-hidden'), 3000);
+}
+document.addEventListener('mousemove', showControls);
+document.addEventListener('touchstart', showControls);
+
+/* ── TVFRAME + PLAYER RESIZE ── */
+function resizeTvFrame() {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  let fw, fh;
+  if (vw / vh > 16 / 9) {
+    fh = vh; fw = vh * 16 / 9;
+  } else {
+    fw = vw; fh = vw * 9 / 16;
+  }
+  const frame = document.getElementById('tvFrame');
+  frame.style.width  = fw + 'px';
+  frame.style.height = fh + 'px';
+  frame.style.setProperty('--u', (fw / 2080) + 'px');
+  const player = document.getElementById('player');
+  player.style.width  = fw + 'px';
+  player.style.height = fh + 'px';
+}
+resizeTvFrame();
+window.addEventListener('resize', resizeTvFrame);
+window.addEventListener('orientationchange', () => setTimeout(resizeTvFrame, 100));
+
+syncLogoOppositeSize();
+window.addEventListener('resize', syncLogoOppositeSize);
+window.addEventListener('orientationchange', () => setTimeout(syncLogoOppositeSize, 100));
+
+syncClockIntroSize();
+window.addEventListener('resize', syncClockIntroSize);
+window.addEventListener('orientationchange', () => setTimeout(syncClockIntroSize, 100));
+</script>
+</body>
+</html>
